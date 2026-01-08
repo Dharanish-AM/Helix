@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { LayoutDashboard, Compass, LogOut, Trophy } from "lucide-react";
 import { signOut, useSession } from "next-auth/react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 export function Navbar() {
   const pathname = usePathname();
@@ -69,9 +70,20 @@ export function Navbar() {
         <div className="ml-auto flex items-center space-x-4">
           {session?.user && (
             <div className="flex items-center gap-4">
-              <span className="text-sm text-muted-foreground hidden sm:inline-block">
-                {session.user.name}
-              </span>
+              <Link href={`/u/${(session.user as any).username || "me"}`}>
+                <div className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity">
+                  <Avatar className="h-8 w-8 border">
+                    <AvatarImage
+                      src={session.user.image!}
+                      alt={session.user.name!}
+                    />
+                    <AvatarFallback>{session.user.name?.[0]}</AvatarFallback>
+                  </Avatar>
+                  <span className="text-sm font-medium hidden sm:inline-block">
+                    {session.user.name}
+                  </span>
+                </div>
+              </Link>
               <Button variant="ghost" size="icon" onClick={() => signOut()}>
                 <LogOut className="w-4 h-4" />
               </Button>

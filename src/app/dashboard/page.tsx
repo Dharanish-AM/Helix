@@ -31,6 +31,10 @@ export default async function Dashboard() {
     profileStats = await getProfileStats(accessToken, session.user!.email!);
   } catch (e: any) {
     console.error("Dashboard fetch error:", e);
+    // If user has a session but isn't in DB (e.g. DB reset), force signout
+    if (e.message.includes("User not found")) {
+      redirect("/api/auth/signout?callbackUrl=/");
+    }
     // error = "Failed to load GitHub data. Please define your .env.local variables.";
     error = `Error: ${e.message || JSON.stringify(e)}`;
   }
@@ -86,10 +90,7 @@ export default async function Dashboard() {
           <OverviewCards stats={profileStats.stats} />
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7 mt-4">
             <div className="col-span-4">
-              {/* <GrowthChart data={(profileStats as any).history || []} /> */}
-              <div className="h-[350px] w-full flex items-center justify-center border rounded-md">
-                Chart Temporarily Disabled
-              </div>
+              <GrowthChart data={(profileStats as any).history || []} />
             </div>
             <div className="col-span-3">
               <ActivityFeed />

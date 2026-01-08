@@ -7,6 +7,16 @@ export interface IUser extends Document {
   githubId: string;
   username: string;
   bio?: string;
+  company?: string;
+  location?: string;
+  blog?: string;
+  twitterUsername?: string;
+  organizations?: Array<{
+    name: string;
+    avatarUrl: string;
+    description?: string;
+  }>;
+  languages?: Array<{ name: string; count: number }>;
   badges?: Array<{ badgeId: string; awardedAt: Date }>;
   scores?: {
     contributionScore: number;
@@ -59,6 +69,25 @@ const UserSchema: Schema = new Schema<IUser>(
       activityScore: { type: Number, default: 0 },
       globalRank: { type: Number, default: 0 },
     },
+
+    // Extended Profile
+    company: String,
+    location: String,
+    blog: String,
+    twitterUsername: String,
+    organizations: [
+      {
+        name: String,
+        avatarUrl: String,
+        description: String,
+      },
+    ],
+    languages: [
+      {
+        name: String,
+        count: Number,
+      },
+    ],
 
     // Social Graph (MVP: Arrays)
     social: {

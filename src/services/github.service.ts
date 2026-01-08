@@ -129,3 +129,117 @@ export const getProfileStats = async (accessToken: string, email: string) => {
     })),
   }; // We will implement contribution graph scraping or GraphQL fetching separately as it's complex
 };
+
+/**
+ * Ingests public data for a user using system credentials (for Cron Jobs).
+ * DOES NOT require user access token.
+ */
+/**
+ * Ingests public data for a user using system credentials (for Cron Jobs).
+ * DOES NOT require user access token.
+ */
+export const ingestUserPublicData = async (username: string) => {
+  const { octokit } = await import("@/lib/github");
+
+  // Parallelize requests
+  // TODO: Add events/activity fetch if needed for heatmap
+  const [userRes, reposRes, orgsRes] = await Promise.all([
+    octokit.rest.users.getByUsername({ username }),
+    octokit.rest.repos.listForUser({
+      username,
+      sort: "updated",
+      per_page: 100,
+      type: "all",
+    }),
+    octokit.rest.orgs.listForUser({ username }),
+  ]);
+
+  const userData = userRes.data;
+  const repoData = reposRes.data;
+  const orgsData = orgsRes.data;
+
+  // Calculate stats logic (DUPLICATED temporarily from getProfileStats - Refactor later if needed)
+  const totalStars = repoData.reduce(
+    (acc, repo) => acc + (repo.stargazers_count || 0),
+    0
+  );
+  const totalForks = repoData.reduce(
+    (acc, repo) => acc + (repo.forks_count || 0),
+    0
+  );
+
+  // Advanced Language Stats
+  const languages: Record<string, number> = {};
+  repoData.forEach((repo) => {
+    if (repo.language) {
+      languages[repo.language] = (languages[repo.language] || 0) + 1;
+    }
+  });
+
+  const languageStats = Object.entries(languages)
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, 8) // Top 8
+    .map(([name, count]) => ({ name, count }));
+
+  await dbConnect();
+
+  const updateData: any = {
+    name: userData.name || userData.login,
+    image: userData.avatar_url,
+    username: userData.login,
+    bio: userData.bio,
+    // Detailed Profile Info
+    company: userData.company,
+    location: userData.location,
+    blog: userData.blog,
+    twitterUsername: userData.twitter_username,
+    organizations: orgsData.map((org) => ({
+      name: org.login,
+      avatarUrl: org.avatar_url,
+      description: org.description,
+    })),
+    languages: languageStats,
+
+    stats: {
+      totalStars,
+      totalForks,
+      totalRepos: repoData.length,
+      followers: userData.followers,
+      following: userData.following,
+    },
+    topRepos: repoData.slice(0, 6).map((repo) => ({
+      name: repo.name,
+      url: repo.html_url,
+      description: repo.description,
+      stars: repo.stargazers_count,
+      language: repo.language,
+    })),
+    lastIngestedAt: new Date(),
+  };
+
+  const userFromDb = await User.findOneAndUpdate(
+    { username: username }, // Find by username for cron
+    updateData,
+    { new: true }
+  ).lean();
+
+  if (!userFromDb) {
+    // If user doesn't exist in DB, we skip creating them via Cron for now
+    // (Only ingest users who have signed up)
+    console.warn(`User ${username} not found in DB during ingestion.`);
+    return null;
+  }
+
+  // Snapshot
+  await Snapshot.create({
+    entityId: userFromDb._id,
+    entityType: "USER",
+    data: {
+      stars: totalStars,
+      followers: userData.followers,
+    },
+    date: new Date(),
+  });
+
+  return userFromDb;
+};
