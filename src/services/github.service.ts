@@ -243,3 +243,96 @@ export const ingestUserPublicData = async (username: string) => {
 
   return userFromDb;
 };
+
+/**
+ * Fetches recent public activity for a user (stars, pushes, PRs).
+ * Validates against the authenticated user (or utilizes public data).
+ */
+export const fetchUserActivity = async (username: string) => {
+  const { octokit } = await import("@/lib/github");
+
+  try {
+    const { data } = await octokit.rest.activity.listPublicEventsForUser({
+      username,
+      per_page: 20,
+    });
+
+    // Filter for interesting events
+    const relevantEvents = data.filter((event) =>
+      [
+        "PushEvent",
+        "PullRequestEvent",
+        "WatchEvent",
+        "CreateEvent",
+        "IssuesEvent",
+      ].includes(event.type!)
+    );
+
+    return relevantEvents.map((event) => ({
+      id: event.id,
+      type: event.type,
+      repo: event.repo.name,
+      createdAt: event.created_at,
+      payload: event.payload, // Contains commits, PR details etc.
+    }));
+  } catch (err) {
+    console.error("Error fetching activity:", err);
+    return [];
+  }
+};
+
+interface ContributionDay {
+  contributionCount: number;
+  date: string;
+  color: string;
+}
+
+interface ContributionWeek {
+  contributionDays: ContributionDay[];
+}
+
+export interface ContributionCalendar {
+  totalContributions: number;
+  weeks: ContributionWeek[];
+}
+
+export const fetchContributionCalendar = async (
+  username: string
+): Promise<ContributionCalendar | null> => {
+  const { octokit } = await import("@/lib/github");
+
+  const query = `
+    query($username: String!) {
+      user(login: $username) {
+        contributionsCollection {
+          contributionCalendar {
+            totalContributions
+            weeks {
+              contributionDays {
+                contributionCount
+                date
+                color
+              }
+            }
+          }
+        }
+      }
+    }
+  `;
+
+  try {
+    const response: any = await octokit.graphql(query, { username });
+    return response.user.contributionsCollection.contributionCalendar;
+  } catch (err) {
+    console.error("Error fetching contribution calendar:", err);
+    return null;
+  }
+};
+
+export const getUserByUsername = async (username: string) => {
+  await dbConnect();
+  // Case-insensitive regex search could be slow, generally standard username matching is preferred.
+  // MongoDB default string collation is exact.
+  const user = await User.findOne({ username }).lean();
+  return user;
+};
