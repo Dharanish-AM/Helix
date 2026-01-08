@@ -3,11 +3,15 @@ import GithubProvider from "next-auth/providers/github";
 import dbConnect from "@/lib/db";
 import User from "@/models/User";
 
+if (!process.env.GITHUB_ID || !process.env.GITHUB_SECRET) {
+  throw new Error("Missing GITHUB_ID or GITHUB_SECRET environment variables");
+}
+
 export const authOptions: NextAuthOptions = {
   providers: [
     GithubProvider({
-      clientId: process.env.GITHUB_ID!,
-      clientSecret: process.env.GITHUB_SECRET!,
+      clientId: process.env.GITHUB_ID,
+      clientSecret: process.env.GITHUB_SECRET,
     }),
   ],
   callbacks: {
